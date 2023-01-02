@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
+	"github.com/rs/cors"
 )
 
 type Article struct {
@@ -221,7 +222,10 @@ func handleRequests() {
 	myRouter.HandleFunc("/name/{value}", getNameByValue)
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PATCH")
 	myRouter.HandleFunc("/names", returnAllNames)
-	log.Fatal(http.ListenAndServe(ServerPort, myRouter))
+
+	/* Set up CORS */
+	handler := cors.Default().Handler(myRouter)
+	log.Fatal(http.ListenAndServe(ServerPort, handler))
 }
 
 // Main Function
