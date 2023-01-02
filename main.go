@@ -197,8 +197,10 @@ func getNameByValue(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Successfully returned name!")
 }
 
-func returnAllNames(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: returnAllNames")
+func returnAllNamesByWorld(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Endpoint Hit: returnAllNamesByWorld")
+	vars := mux.Vars(r)
+	world := vars["world"]
 
 	/* Connect to our DB */
 	client, err := getMongoDBClient()
@@ -212,7 +214,8 @@ func returnAllNames(w http.ResponseWriter, r *http.Request) {
 	/* Get All Documents in Names Collection */
 	collection := client.Database(DatabaseName).Collection(CollectionNames)
 	// sort := bson.M{"document.value": 1} // Sort by document value, 1 is ascending and -1 is descending
-	cursor, err := collection.Find(ctx, bson.M{}, nil)
+	filterFind := bson.D{{"world", world}}
+	cursor, err := collection.Find(ctx, filterFind, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -222,7 +225,7 @@ func returnAllNames(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(results)
 	json.NewEncoder(w).Encode(results)
-	fmt.Println("Successfully returned name!")
+	fmt.Println("Successfully returned names from world %s!", world)
 }
 
 // PATCH /name
@@ -277,12 +280,12 @@ func handleRequests() {
 	myRouter.HandleFunc("/", homePage)
 
 	/* Names */
+	myRouter.HandleFunc("/names/{world}", returnAllNamesByWorld)
 	myRouter.HandleFunc("/name/tokenid/{tokenid}", getNameByTokenId)
 	myRouter.HandleFunc("/name/value/{value}", getNameByValue)
 	myRouter.HandleFunc("/name/{tokenid}", deleteNamebyTokenId).Methods("DELETE")
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PATCH")
-	myRouter.HandleFunc("/names", returnAllNames)
 
 	/* Set up CORS */
 	handler := cors.Default().Handler(myRouter)
