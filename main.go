@@ -108,6 +108,33 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(name)
 }
 
+/* DELETE /name/{tokenid} */
+func deleteNamebyTokenId(w http.ResponseWriter, r *http.Request){
+	fmt.Println("Endpoint Hit: deleteNamebyTokenId")
+	vars := mux.Vars(r)
+	tokenIdStr := vars["tokenid"]
+	tokenid, err := strconv.Atoi(tokenIdStr)
+	fmt.Println(tokenIdStr)
+
+	/* Connect to our DB */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	/* Get Document by Filter */
+	collection := client.Database(DatabaseName).Collection(CollectionNames)
+	filter := bson.D{{"tokenid", tokenid}} 
+	deleteResult, err := collection.DeleteMany(context.TODO(), filter) 
+	if err != nil { log.Fatal(err) } 
+	msg := fmt.Sprintf("Deleted %v documents in the people collection", deleteResult.DeletedCount)
+	fmt.Fprintf(w, msg)
+	fmt.Println(msg)
+}
+
 /* GET /name/tokenid/{tokenid} */
 func getNameByTokenId(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Endpoint Hit: getNameById")
@@ -252,8 +279,8 @@ func handleRequests() {
 	/* Names */
 	myRouter.HandleFunc("/name/tokenid/{tokenid}", getNameByTokenId)
 	myRouter.HandleFunc("/name/value/{value}", getNameByValue)
+	myRouter.HandleFunc("/name/{tokenid}", deleteNamebyTokenId).Methods("DELETE")
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
-	// myRouter.HandleFunc("/article/{id}", deleteName).Methods("DELETE")
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PATCH")
 	myRouter.HandleFunc("/names", returnAllNames)
 
