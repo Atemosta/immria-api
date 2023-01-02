@@ -108,7 +108,7 @@ func getNameByValue(w http.ResponseWriter, r *http.Request){
 	vars := mux.Vars(r)
 	value := vars["value"]
 
-	// Connect to our DB
+	/* Connect to our DB */
 	client, err := getMongoDBClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	err = client.Connect(ctx)
@@ -177,17 +177,50 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 	fmt.Println(returnStatement)
 }
 
+func returnAllNames(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Endpoint Hit: returnAllNames")
+
+	/* Connect to our DB */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	/* Get All Documents in Names Collection */
+	database := viper.GetString("DATABASE_NAME")
+	collection := viper.GetString("COLLECTION_NAMES")
+	gallery := client.Database(database).Collection(collection)
+	cursor, err := gallery.Find(ctx, bson.M{}, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var results []bson.M
+	if err = cursor.All(ctx, &results); err != nil {
+    log.Fatal(err)
+	}
+	fmt.Println(results)
+	json.NewEncoder(w).Encode(results)
+	fmt.Println("Successfully returned name!")
+}
+
+
 // REST Endpoints
 func handleRequests() {
 	// Creates a new instance of a mux router
 	myRouter := mux.NewRouter().StrictSlash(true)
+
+	/* Health Check */
 	myRouter.HandleFunc("/", homePage)
-	// myRouter.HandleFunc("/all", returnAllArticles)
+
 	/* Names */
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
 	// myRouter.HandleFunc("/article/{id}", deleteName).Methods("DELETE")
 	myRouter.HandleFunc("/name/{value}", getNameByValue)
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PATCH")
+	myRouter.HandleFunc("/names", returnAllNames)
 	log.Fatal(http.ListenAndServe(ServerPort, myRouter))
 }
 
