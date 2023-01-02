@@ -24,21 +24,10 @@ type Article struct {
 	Content string `json:"content"`
 }
 
-type Command struct {
-	Name 	string
-	Value string
-}
-
-type CommandDB struct {
-	ID		primitive.ObjectID `bson:"_id"`
-	Name 	string
-	Value string
-}
-
 type Name struct {
-	Id		int
-	Value string
-	World string
+	TokenId	int			`json:"tokenId"`
+	Value 	string 	`json:"value"`
+	World 	string 	`json:"world"`
 }
 
 type NameID struct {
@@ -52,11 +41,13 @@ type NameID struct {
 // that we can then populate in our main function
 // to simulate a database
 var Articles []Article
-var MongoDbUser string
-var MongoDbPass string
-var MongoDbHost string
-var MongoDbPort int
-var ServerPort string
+var DatabaseName		string
+var CollectionNames string 
+var MongoDbUser 		string
+var MongoDbPass 		string
+var MongoDbHost 		string
+var MongoDbPort 		int
+var ServerPort 			string
 
 /* Get MongoDB Client */
 func getMongoDBClient() (*mongo.Client, error) {
@@ -76,14 +67,15 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 func createNewName(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: createNewName")
-	// get the body of our POST request
-	// unmarshal this into a new Article struct
-	// append this to our Articles array.    
+	/* Umarshal POST body into Name struct */
 	reqBody, _ := ioutil.ReadAll(r.Body)
 	var name Name 
 	json.Unmarshal(reqBody, &name)
+	charLimit := viper.GetInt("CHARACTER_LIMIT")  // first 20 characters 
+	if len(name.Value) > 20 { name.Value = name.Value[: + charLimit] }
+	if len(name.World) > 20 { name.World = name.World[: + charLimit] }
 
-	/* Insert new document into database */
+	/* Connect to database */
 	client, err := getMongoDBClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	err = client.Connect(ctx)
@@ -91,16 +83,27 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 			log.Fatal(err)
 	}
 	defer client.Disconnect(ctx)
-	database := client.Database("immria")
-	collection := database.Collection("names")
-	result, err := collection.InsertOne(ctx, name)
+	database := client.Database(DatabaseName)
+	collection := database.Collection(CollectionNames)
+
+	// Get Token Id
+	count, err := collection.CountDocuments(context.TODO(), bson.M{}) 
+	if err != nil { 
+		 // handle error 
+	} 
+	fmt.Println("New TokenId: ")
+	fmt.Println(count)
+
+	// Insert New Doc
+	name.TokenId = int(count)
+	resultInsert, err := collection.InsertOne(ctx, name)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Print Return Statement
 	fmt.Println(name)
-	fmt.Println(result)
+	fmt.Println(resultInsert)
 	json.NewEncoder(w).Encode(name)
 }
 
@@ -128,7 +131,7 @@ func getNameByValue(w http.ResponseWriter, r *http.Request){
 	if err != nil {
 		panic(err)
 	}
-	fmt.Sprintf("Name Id: %d",   result.Id)
+	fmt.Sprintf("Name Id: %d",   result.TokenId)
 	fmt.Println("Name Value: " + result.Value)
 	fmt.Println("Name World: " + result.World)
 	json.NewEncoder(w).Encode(result)
@@ -153,7 +156,7 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 	database := viper.GetString("DATABASE_NAME")
 	collection := viper.GetString("COLLECTION_NAMES")
 	gallery := client.Database(database).Collection(collection)
-	filterFind := bson.D{{"id", name.Id}}
+	filterFind := bson.D{{"tokenId", name.TokenId}}
 	var result NameID
 	err = gallery.FindOne(context.TODO(), filterFind).Decode(&result)
 	if err != nil {
@@ -173,7 +176,7 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 	fmt.Println(resultUpdate)
 
 	// Return Statement
-	returnStatement := fmt.Sprintf("Successfully updated name id: %d with value: %s",name.Id , name.Value )
+	returnStatement := fmt.Sprintf("Successfully updated name id: %d with value: %s",name.TokenId , name.Value )
 	fmt.Fprintf(w, returnStatement)
 	fmt.Println(returnStatement)
 }
@@ -247,6 +250,8 @@ func main() {
 	MongoDbPass = viper.GetString("mongodb.pass")
 	MongoDbHost = viper.GetString("mongodb.host")
 	MongoDbPort = viper.GetInt("mongodb.port")
+	DatabaseName = viper.GetString("DATABASE_NAME") 
+	CollectionNames = viper.GetString("COLLECTION_NAMES") 
 	// fmt.Println("EXAMPLE_PATH is\t", viper.GetString("EXAMPLE_PATH"))
 	// fmt.Println("EXAMPLE_VAR is\t", viper.GetString("EXAMPLE_VAR"))
 
