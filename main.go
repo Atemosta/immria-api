@@ -34,6 +34,12 @@ type CommandDB struct {
 	Value string
 }
 
+type Name struct {
+	Id		int
+	Value string
+	World string
+}
+
 // let's declare a global Articles array
 // that we can then populate in our main function
 // to simulate a database
@@ -44,6 +50,7 @@ var MongoDbHost string
 var MongoDbPort int
 var ServerPort int
 
+/* Get MongoDB Client */
 func getMongoDBClient() (*mongo.Client, error) {
 	// mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 	var mongoDbUri = fmt.Sprintf("mongodb://%s:%s@%s:%d", MongoDbUser, MongoDbPass, MongoDbHost, MongoDbPort)
@@ -60,33 +67,14 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: homePage")
 }
 
-func returnAllArticles(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: returnAllArticles")
-	json.NewEncoder(w).Encode(Articles)
-}
-
-func createNewArticle(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: createNewArticle")
+func createNewName(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Endpoint Hit: createNewName")
 	// get the body of our POST request
 	// unmarshal this into a new Article struct
 	// append this to our Articles array.    
 	reqBody, _ := ioutil.ReadAll(r.Body)
-	var article Article 
-	json.Unmarshal(reqBody, &article)
-	// update our global Articles array to include
-	// our new Article
-	Articles = append(Articles, article)
-	json.NewEncoder(w).Encode(article)
-}
-
-func createNewCommand(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: createNewCommand")
-	// get the body of our POST request
-	// unmarshal this into a new Article struct
-	// append this to our Articles array.    
-	reqBody, _ := ioutil.ReadAll(r.Body)
-	var command Command 
-	json.Unmarshal(reqBody, &command)
+	var name Name 
+	json.Unmarshal(reqBody, &name)
 
 	/* Insert new document into database */
 	client, err := getMongoDBClient()
@@ -97,51 +85,25 @@ func createNewCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Disconnect(ctx)
 	database := client.Database("immria")
-	collection := database.Collection("worlds")
-	result, err := collection.InsertOne(ctx, command)
+	collection := database.Collection("names")
+	result, err := collection.InsertOne(ctx, name)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Print Return Statement
-	fmt.Println(command)
+	fmt.Println(name)
 	fmt.Println(result)
-	json.NewEncoder(w).Encode(command)
+	json.NewEncoder(w).Encode(name)
 }
 
-
-func deleteArticle(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: deleteArticle")
-	// once again, we will need to parse the path parameters
+func getNameByValue(w http.ResponseWriter, r *http.Request){
+	fmt.Println("Endpoint Hit: getNameByValue")
 	vars := mux.Vars(r)
-	// we will need to extract the `id` of the article we
-	// wish to delete
-	id := vars["id"]
-
-	// we then need to loop through all our articles
-	for index, article := range Articles {
-			// if our id path parameter matches one of our
-			// articles
-			if article.Id == id {
-					// updates our Articles array to remove the 
-					// article
-					Articles = append(Articles[:index], Articles[index+1:]...)
-			}
-	}
-	fmt.Fprintf(w, "Successfully delete Article Id: " + id)
-}
-
-func getCommandValue(w http.ResponseWriter, r *http.Request){
-	fmt.Println("Endpoint Hit: getCommandValue")
-	vars := mux.Vars(r)
-	name := vars["name"]
+	value := vars["value"]
 
 	// Connect to our DB
-	// mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://root:pass12345@localhost"))
-	if err != nil {
-			log.Fatal(err)
-	}
+	client, err := getMongoDBClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	err = client.Connect(ctx)
 	if err != nil {
@@ -150,17 +112,18 @@ func getCommandValue(w http.ResponseWriter, r *http.Request){
 	defer client.Disconnect(ctx)
 
 	/* Get Document by Filter */
-	collection := client.Database("feh").Collection("robin")
-	filterFind := bson.D{{"name", name}}
-	var result Command
+	collection := client.Database("immria").Collection("names")
+	filterFind := bson.D{{"value", value}}
+	var result Name
 	err = collection.FindOne(context.TODO(), filterFind).Decode(&result)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Command Name: " 	+ result.Name)
-	fmt.Println("Command Value: " + result.Value)
+	fmt.Println("Name Id: %d",   result.Id)
+	fmt.Println("Name Value: " + result.Value)
+	fmt.Println("Name World: " + result.World)
 	json.NewEncoder(w).Encode(result)
-	fmt.Println("Successfully returned command value!")
+	fmt.Println("Successfully returned name!")
 }
 
 func returnSingleArticle(w http.ResponseWriter, r *http.Request){
@@ -234,13 +197,13 @@ func handleRequests() {
 	// Creates a new instance of a mux router
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", homePage)
-	myRouter.HandleFunc("/all", returnAllArticles)
-	myRouter.HandleFunc("/article", createNewArticle).Methods("POST")
-	myRouter.HandleFunc("/article/{id}", deleteArticle).Methods("DELETE")
-	myRouter.HandleFunc("/article/{id}", returnSingleArticle)
-	myRouter.HandleFunc("/command", createNewCommand).Methods("POST")
-	myRouter.HandleFunc("/command", updateExistingCommand).Methods("PATCH")
-	myRouter.HandleFunc("/command/{name}", getCommandValue).Methods("GET")
+	// myRouter.HandleFunc("/all", returnAllArticles)
+	myRouter.HandleFunc("/name", createNewName).Methods("POST")
+	// myRouter.HandleFunc("/article/{id}", deleteName).Methods("DELETE")
+	myRouter.HandleFunc("/name/{value}", getNameByValue)
+	// myRouter.HandleFunc("/command", createNewCommand).Methods("POST")
+	// myRouter.HandleFunc("/command", updateExistingCommand).Methods("PATCH")
+	// myRouter.HandleFunc("/command/{name}", getCommandValue).Methods("GET")
 	log.Fatal(http.ListenAndServe(":1545", myRouter))
 }
 
@@ -268,9 +231,5 @@ func main() {
 
 	// Start up server
 	fmt.Println("Starting server...")
-	Articles = []Article{
-		Article{Id: "1", Title: "Hello", Desc: "Article Description", Content: "Article Content"},
-		Article{Id: "2", Title: "Hello 2", Desc: "Article Description", Content: "Article Content"},
-	}
 	handleRequests()
 }
