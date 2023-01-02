@@ -109,7 +109,7 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 }
 
 /* GET /name/tokenid/{tokenid} */
-func getNameById(w http.ResponseWriter, r *http.Request){
+func getNameByTokenId(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Endpoint Hit: getNameById")
 	vars := mux.Vars(r)
 	tokenIdStr := vars["tokenid"]
@@ -140,6 +140,7 @@ func getNameById(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Successfully returned name!")
 }
 
+/* GET /name/value/{value} */
 func getNameByValue(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Endpoint Hit: getNameByValue")
 	vars := mux.Vars(r)
@@ -155,12 +156,10 @@ func getNameByValue(w http.ResponseWriter, r *http.Request){
 	defer client.Disconnect(ctx)
 
 	/* Get Document by Filter */
-	database := viper.GetString("DATABASE_NAME")
-	collection := viper.GetString("COLLECTION_NAMES")
-	gallery := client.Database(database).Collection(collection)
+	collection := client.Database(DatabaseName).Collection(CollectionNames)
 	filterFind := bson.D{{"value", value}}
 	var result Name
-	err = gallery.FindOne(context.TODO(), filterFind).Decode(&result)
+	err = collection.FindOne(context.TODO(), filterFind).Decode(&result)
 	if err != nil {
 		panic(err)
 	}
@@ -199,6 +198,7 @@ func returnAllNames(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Successfully returned name!")
 }
 
+// PATCH /name
 func updateExistingName(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Endpoint Hit: updateExistingName")
 	// Unmarshal post request
@@ -214,12 +214,10 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 			log.Fatal(err)
 	}
 	defer client.Disconnect(ctx)
-	database := viper.GetString("DATABASE_NAME")
-	collection := viper.GetString("COLLECTION_NAMES")
-	gallery := client.Database(database).Collection(collection)
-	filterFind := bson.D{{"tokenId", name.TokenId}}
+	collection := client.Database(DatabaseName).Collection(CollectionNames)
+	filterFind := bson.D{{"tokenid", name.TokenId}}
 	var result NameID
-	err = gallery.FindOne(context.TODO(), filterFind).Decode(&result)
+	err = collection.FindOne(context.TODO(), filterFind).Decode(&result)
 	if err != nil {
 		panic(err)
 	}
@@ -230,7 +228,7 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 	id, _ := primitive.ObjectIDFromHex(result.ID.Hex())
 	filterUpdate := bson.D{{"_id", id}}
 	valueUpdate := bson.D{{"$set", bson.D{{"value", name.Value}}}}
-	resultUpdate, err := gallery.UpdateOne(context.TODO(), filterUpdate, valueUpdate)
+	resultUpdate, err := collection.UpdateOne(context.TODO(), filterUpdate, valueUpdate)
 	if err != nil {
 		panic(err)
 	}
@@ -252,7 +250,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/", homePage)
 
 	/* Names */
-	myRouter.HandleFunc("/name/tokenid/{tokenid}", getNameById)
+	myRouter.HandleFunc("/name/tokenid/{tokenid}", getNameByTokenId)
 	myRouter.HandleFunc("/name/value/{value}", getNameByValue)
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
 	// myRouter.HandleFunc("/article/{id}", deleteName).Methods("DELETE")
