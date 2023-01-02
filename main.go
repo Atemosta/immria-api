@@ -7,14 +7,15 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
+	"github.com/gorilla/mux"
+	"github.com/rs/cors"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"github.com/gorilla/mux"
-	"github.com/spf13/viper"
-	"github.com/rs/cors"
 )
 
 type Article struct {
@@ -107,6 +108,38 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(name)
 }
 
+/* GET /name/tokenid/{tokenid} */
+func getNameById(w http.ResponseWriter, r *http.Request){
+	fmt.Println("Endpoint Hit: getNameById")
+	vars := mux.Vars(r)
+	tokenIdStr := vars["tokenid"]
+	tokenid, err := strconv.Atoi(tokenIdStr)
+	fmt.Println(tokenid)
+
+	/* Connect to our DB */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	/* Get Document by Filter */
+	collection := client.Database(DatabaseName).Collection(CollectionNames)
+	filterFind := bson.D{{"tokenid", tokenid}}
+	var result Name
+	err = collection.FindOne(context.TODO(), filterFind).Decode(&result)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Sprintf("Name Id: %d",   result.TokenId)
+	fmt.Println("Name Value: " + result.Value)
+	fmt.Println("Name World: " + result.World)
+	json.NewEncoder(w).Encode(result)
+	fmt.Println("Successfully returned name!")
+}
+
 func getNameByValue(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Endpoint Hit: getNameByValue")
 	vars := mux.Vars(r)
@@ -135,6 +168,34 @@ func getNameByValue(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Name Value: " + result.Value)
 	fmt.Println("Name World: " + result.World)
 	json.NewEncoder(w).Encode(result)
+	fmt.Println("Successfully returned name!")
+}
+
+func returnAllNames(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Endpoint Hit: returnAllNames")
+
+	/* Connect to our DB */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	/* Get All Documents in Names Collection */
+	collection := client.Database(DatabaseName).Collection(CollectionNames)
+	// sort := bson.M{"document.value": 1} // Sort by document value, 1 is ascending and -1 is descending
+	cursor, err := collection.Find(ctx, bson.M{}, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var results []bson.M
+	if err = cursor.All(ctx, &results); err != nil {
+    log.Fatal(err)
+	}
+	fmt.Println(results)
+	json.NewEncoder(w).Encode(results)
 	fmt.Println("Successfully returned name!")
 }
 
@@ -181,35 +242,6 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 	fmt.Println(returnStatement)
 }
 
-func returnAllNames(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Endpoint Hit: returnAllNames")
-
-	/* Connect to our DB */
-	client, err := getMongoDBClient()
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	err = client.Connect(ctx)
-	if err != nil {
-			log.Fatal(err)
-	}
-	defer client.Disconnect(ctx)
-
-	/* Get All Documents in Names Collection */
-	database := viper.GetString("DATABASE_NAME")
-	collection := viper.GetString("COLLECTION_NAMES")
-	gallery := client.Database(database).Collection(collection)
-	cursor, err := gallery.Find(ctx, bson.M{}, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var results []bson.M
-	if err = cursor.All(ctx, &results); err != nil {
-    log.Fatal(err)
-	}
-	fmt.Println(results)
-	json.NewEncoder(w).Encode(results)
-	fmt.Println("Successfully returned name!")
-}
-
 
 // REST Endpoints
 func handleRequests() {
@@ -220,9 +252,10 @@ func handleRequests() {
 	myRouter.HandleFunc("/", homePage)
 
 	/* Names */
+	myRouter.HandleFunc("/name/tokenid/{tokenid}", getNameById)
+	myRouter.HandleFunc("/name/value/{value}", getNameByValue)
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
 	// myRouter.HandleFunc("/article/{id}", deleteName).Methods("DELETE")
-	myRouter.HandleFunc("/name/{value}", getNameByValue)
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PATCH")
 	myRouter.HandleFunc("/names", returnAllNames)
 
