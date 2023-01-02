@@ -44,6 +44,17 @@ var MongoDbHost string
 var MongoDbPort int
 var ServerPort int
 
+func getMongoDBClient() (*mongo.Client, error) {
+	// mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+	var mongoDbUri = fmt.Sprintf("mongodb://%s:%s@%s:%d", MongoDbUser, MongoDbPass, MongoDbHost, MongoDbPort)
+	fmt.Println(mongoDbUri)
+	client, err := mongo.NewClient(options.Client().ApplyURI(mongoDbUri))
+	if err != nil {
+			log.Fatal(err)
+	}
+  return client, nil
+}
+
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
 	fmt.Println("Endpoint Hit: homePage")
@@ -77,22 +88,14 @@ func createNewCommand(w http.ResponseWriter, r *http.Request) {
 	var command Command 
 	json.Unmarshal(reqBody, &command)
 
-	// Add command to our database
-	// mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-	var mongoDbUri = fmt.Sprintf("mongodb://%s:%s@%s:%d", MongoDbUser, MongoDbPass, MongoDbHost, MongoDbPort)
-	fmt.Println(mongoDbUri)
-	client, err := mongo.NewClient(options.Client().ApplyURI(mongoDbUri))
-	if err != nil {
-			log.Fatal(err)
-	}
+	/* Insert new document into database */
+	client, err := getMongoDBClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	err = client.Connect(ctx)
 	if err != nil {
 			log.Fatal(err)
 	}
 	defer client.Disconnect(ctx)
-
-	/* List Get Robin Bot Collection */
 	database := client.Database("immria")
 	collection := database.Collection("worlds")
 	result, err := collection.InsertOne(ctx, command)
