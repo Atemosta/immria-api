@@ -228,7 +228,7 @@ func returnAllNamesByWorld(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Successfully returned names from world %s!", world)
 }
 
-// PATCH /name
+// PUT /name
 func updateExistingName(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Endpoint Hit: updateExistingName")
 	// Unmarshal post request
@@ -265,9 +265,14 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 	fmt.Println(resultUpdate)
 
 	// Return Statement
-	returnStatement := fmt.Sprintf("Successfully updated name id: %d with value: %s",name.TokenId , name.Value )
-	fmt.Fprintf(w, returnStatement)
-	fmt.Println(returnStatement)
+	filterFind = bson.D{{"_id", id}}
+	var updatedName Name
+	err = collection.FindOne(context.TODO(), filterFind).Decode(&updatedName)
+	if err != nil {
+		panic(err)
+	}
+	json.NewEncoder(w).Encode(updatedName)
+	fmt.Println(updatedName)
 }
 
 
@@ -285,10 +290,17 @@ func handleRequests() {
 	myRouter.HandleFunc("/name/value/{value}", getNameByValue)
 	myRouter.HandleFunc("/name/{tokenid}", deleteNamebyTokenId).Methods("DELETE")
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
-	myRouter.HandleFunc("/name", updateExistingName).Methods("PATCH")
+	myRouter.HandleFunc("/name", updateExistingName).Methods("PUT")
 
 	/* Set up CORS */
-	handler := cors.Default().Handler(myRouter)
+	// c := cors.New(cors.Options{
+	// 	AllowedOrigins: []string{"*"},
+	// 	AllowedMethods: []string{ http.MethodGet, http.MethodPost, http.MethodPut},
+	// 	AllowedHeaders:   []string{"*"},
+	// 	AllowCredentials: false,
+	// })
+	// handler := c.Handler(myRouter)
+	handler := cors.AllowAll().Handler(myRouter)
 	log.Fatal(http.ListenAndServe(ServerPort, handler))
 }
 
@@ -313,8 +325,6 @@ func main() {
 	MongoDbPort = viper.GetInt("mongodb.port")
 	DatabaseName = viper.GetString("DATABASE_NAME") 
 	CollectionNames = viper.GetString("COLLECTION_NAMES") 
-	// fmt.Println("EXAMPLE_PATH is\t", viper.GetString("EXAMPLE_PATH"))
-	// fmt.Println("EXAMPLE_VAR is\t", viper.GetString("EXAMPLE_VAR"))
 
 	// Start up server
 	fmt.Println("Starting server...")
