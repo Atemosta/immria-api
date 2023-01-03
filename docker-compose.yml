@@ -1,0 +1,15 @@
+version: "3.8"
+services:
+  # API: mongo 127.0.0.1:1545
+  api:
+    build: ./
+    command: go run main.go
+    container_name: immria-api
+    networks:
+      - mongodb-network
+    ports:
+      - ${EXTERNAL_PORT}:1545
+    restart: unless-stopped
+networks:
+  mongodb-network:
+    external: true
