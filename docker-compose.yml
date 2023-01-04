@@ -5,11 +5,21 @@ services:
     build: ./
     command: go run main.go
     container_name: immria-api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.immriaapi.rule=Host(`api.immria.atemosta.com`)"
+      # - "traefik.http.routers.immria.middlewares=auth"
+      - "traefik.http.routers.immriaapi.entrypoints=web-secure"
+      - "traefik.http.routers.immriaapi.tls=true"
+      - "traefik.http.routers.immriaapi.tls.certResolver=default"
     networks:
       - mongodb-network
+      - traefik
     ports:
       - ${EXTERNAL_PORT}:1545
     restart: unless-stopped
 networks:
   mongodb-network:
+    external: true
+  traefik:
     external: true
