@@ -41,22 +41,22 @@ type NameID struct {
 }
 
 type World struct {
-	Desc	string  
-	Image	string `json:"image"`
-	Owner string `json:"owner"`
-	Title	string `json:"title"`
-	Type 	string `json:"type"`
-	View 	string `json:"view"`
+	Desc		string  
+	Image		string `json:"image"`
+	Owner 	string `json:"owner"`
+	Title		string `json:"title"`
+	Type 		string `json:"type"`
+	Status 	string `json:"status"`
 }
 
 type WorldID struct {
 	// World
-	Desc	string `json:"desc"` 
-	Image	string `json:"image"`
-	Owner string `json:"owner"`
-	Title	string `json:"title"`
-	Type 	string `json:"type"`
-	View 	string `json:"view"`
+	Desc		string 	`json:"desc"` 
+	Image		string 	`json:"image"`
+	Owner 	string 	`json:"owner"`
+	Title		string 	`json:"title"`
+	Type 		string 	`json:"type"`
+	Status 	string 	`json:"status"`
 	ID	primitive.ObjectID `bson:"_id"`
 }
 
@@ -297,6 +297,47 @@ func getWorld(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Successfully returned world!")
 }
 
+func getWorlds(w http.ResponseWriter, r *http.Request) {
+	// Start Func
+	fmt.Println("Endpoint Hit: getWorlds")
+
+	// Get Query Params
+	params := r.URL.Query()
+	fmt.Println(params)
+	var status string
+	if _, ok := params["status"]; ok { 
+		status = params["status"][0]
+	} else {
+		status = "public" 
+	}
+
+	/* Connect to our DB */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	/* Get All Documents in Collection By Filter */
+	collection := client.Database(DatabaseName).Collection(CollectionWorlds)
+	filter := bson.D{{"status", status}}
+	cursor, err := collection.Find(ctx, filter, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var results []bson.M
+	if err = cursor.All(ctx, &results); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(results)
+
+	// Return Results
+	json.NewEncoder(w).Encode(results)
+	fmt.Println("Successfully returned worlds from status %s!", status)
+}
+
 func returnAllNamesByWorld(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: returnAllNamesByWorld")
 	vars := mux.Vars(r)
@@ -393,6 +434,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PUT")
 
 	/* Worlds */
+	myRouter.HandleFunc("/worlds", getWorlds)
 	myRouter.HandleFunc("/world/{id}", getWorld)
 	myRouter.HandleFunc("/world", createNewWorld).Methods("POST")
 
