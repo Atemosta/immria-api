@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 	"github.com/gorilla/mux"
+	"github.com/jinzhu/copier"
 	"github.com/rs/cors"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
@@ -18,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+/*** Structs ***/
 type Article struct {
 	Id      string `json:"Id"`
 	Title   string `json:"Title"`
@@ -38,19 +40,37 @@ type NameID struct {
 	World string
 }
 
+type World struct {
+	Desc	string `json:"desc"`
+	Image	string `json:"image"`
+	Owner string `json:"owner"`
+	Title	string `json:"title"`
+	Type 	string `json:"type"`
+	View 	string `json:"view"`
+}
+
+type WorldID struct {
+	World
+	ID	primitive.ObjectID `bson:"_id"`
+}
+
 // let's declare a global Articles array
 // that we can then populate in our main function
 // to simulate a database
 var Articles []Article
-var DatabaseName		string
-var CollectionNames string 
-var MongoDbUser 		string
-var MongoDbPass 		string
-var MongoDbHost 		string
-var MongoDbPort 		int
-var ServerPort 			string
+var CharacterLimit			int
+var DatabaseName 				string
+var DescriptionLimit		int
+var CollectionNames 		string 
+var CollectionWorlds 		string
+var MongoDbUser 				string
+var MongoDbPass 				string
+var MongoDbHost 				string
+var MongoDbPort 				int
+var ServerPort 					string
 
-/* Get MongoDB Client */
+/*--- MongoDB Helper Funcs ---*/
+// Get MongoDB Client
 func getMongoDBClient() (*mongo.Client, error) {
 	// mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 	var mongoDbUri = fmt.Sprintf("mongodb://%s:%s@%s:%d", MongoDbUser, MongoDbPass, MongoDbHost, MongoDbPort)
@@ -61,20 +81,22 @@ func getMongoDBClient() (*mongo.Client, error) {
   return client, nil
 }
 
+/*--- REST Calls ---*/
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the HomePage!")
 	fmt.Println("Endpoint Hit: homePage")
 }
 
+// POST "/name"
 func createNewName(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: createNewName")
 	/* Umarshal POST body into Name struct */
 	reqBody, _ := ioutil.ReadAll(r.Body)
 	var name Name 
 	json.Unmarshal(reqBody, &name)
-	charLimit := viper.GetInt("CHARACTER_LIMIT")  // first 20 characters 
-	if len(name.Value) > 20 { name.Value = name.Value[: + charLimit] }
-	if len(name.World) > 20 { name.World = name.World[: + charLimit] }
+	CharacterLimit := viper.GetInt("CHARACTER_LIMIT")  // first 20 characters 
+	if len(name.Value) > 20 { name.Value = name.Value[: + CharacterLimit] }
+	if len(name.World) > 20 { name.World = name.World[: + CharacterLimit] }
 
 	/* Connect to database */
 	client, err := getMongoDBClient()
@@ -84,6 +106,7 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 			log.Fatal(err)
 	}
 	defer client.Disconnect(ctx)
+	fmt.Println(DatabaseName)
 	database := client.Database(DatabaseName)
 	collection := database.Collection(CollectionNames)
 
@@ -106,6 +129,44 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(name)
 	fmt.Println(resultInsert)
 	json.NewEncoder(w).Encode(name)
+}
+
+// POST "/world"
+func createNewWorld(w http.ResponseWriter, r *http.Request) {
+	// Enter Func
+	fmt.Println("Endpoint Hit: createNewWorld")
+	
+	/* Umarshal POST body into struct */
+	reqBody, _ := ioutil.ReadAll(r.Body)
+	var world World 
+	json.Unmarshal(reqBody, &world)
+	if len(world.Desc) > DescriptionLimit { world.Desc = world.Desc[: + DescriptionLimit] }
+	if len(world.Title) > CharacterLimit { world.Title = world.Title[: + CharacterLimit] }
+
+	/* Connect to database */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+	collection := client.Database(DatabaseName).Collection(CollectionWorlds)
+
+	// Insert New Doc
+	result, err := collection.InsertOne(ctx, world)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(result)
+
+	// Print Return Statement
+	var worldID WorldID
+	copier.Copy(&worldID, &world)
+	id := result.InsertedID.(primitive.ObjectID) //.Hex()
+	worldID.ID = id
+	fmt.Println(worldID)
+	json.NewEncoder(w).Encode(worldID)
 }
 
 /* DELETE /name/{tokenid} */
@@ -292,6 +353,9 @@ func handleRequests() {
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PUT")
 
+	/* Worlds */
+	myRouter.HandleFunc("/world", createNewWorld).Methods("POST")
+
 	/* Set up CORS */
 	// c := cors.New(cors.Options{
 	// 	AllowedOrigins: []string{"*"},
@@ -323,8 +387,11 @@ func main() {
 	MongoDbPass = viper.GetString("mongodb.pass")
 	MongoDbHost = viper.GetString("mongodb.host")
 	MongoDbPort = viper.GetInt("mongodb.port")
-	DatabaseName = viper.GetString("DATABASE_NAME") 
+	DescriptionLimit = viper.GetInt("DESCRIPTION_LIMIT")
+	CharacterLimit = viper.GetInt("CHARACTER_LIMIT")
 	CollectionNames = viper.GetString("COLLECTION_NAMES") 
+	CollectionWorlds = viper.GetString("COLLECTION_WORLDS")
+	DatabaseName = viper.GetString("DATABASE_NAME") 
 
 	// Start up server
 	fmt.Println("Starting server...")

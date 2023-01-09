@@ -7,7 +7,9 @@ mongodb:
   host: "dbhost"
   port: "dbport"
 
+CHARACTER_LIMIT: 45
 COLLECTION_NAMES: "cname"
+COLLECTION_WORLDS: "wname"
 DATABASE_NAME: "dbname"
 EXAMPLE_VAR: "variable from config.yml"
 EXAMPLE_PATH: "path from config.yml"
