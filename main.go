@@ -41,7 +41,7 @@ type NameID struct {
 }
 
 type World struct {
-	Desc	string `json:"desc"`
+	Desc	string  
 	Image	string `json:"image"`
 	Owner string `json:"owner"`
 	Title	string `json:"title"`
@@ -50,7 +50,13 @@ type World struct {
 }
 
 type WorldID struct {
-	World
+	// World
+	Desc	string `json:"desc"` 
+	Image	string `json:"image"`
+	Owner string `json:"owner"`
+	Title	string `json:"title"`
+	Type 	string `json:"type"`
+	View 	string `json:"view"`
 	ID	primitive.ObjectID `bson:"_id"`
 }
 
@@ -258,6 +264,39 @@ func getNameByValue(w http.ResponseWriter, r *http.Request){
 	fmt.Println("Successfully returned name!")
 }
 
+/* GET /world/{id} */
+func getWorld(w http.ResponseWriter, r *http.Request){
+	// Start Func
+	fmt.Println("Endpoint Hit: getWorld")
+
+	// Get Path Params
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"]) // ObjectID
+	
+	// Connect to our DB
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	/* Get Document by Filter */
+	collection := client.Database(DatabaseName).Collection(CollectionWorlds)
+	filter := bson.M{"_id": id}
+	var result WorldID
+	err = collection.FindOne(context.TODO(), filter).Decode(&result)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(result)
+
+	// Return Results
+	json.NewEncoder(w).Encode(result)
+	fmt.Println("Successfully returned world!")
+}
+
 func returnAllNamesByWorld(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Endpoint Hit: returnAllNamesByWorld")
 	vars := mux.Vars(r)
@@ -354,6 +393,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PUT")
 
 	/* Worlds */
+	myRouter.HandleFunc("/world/{id}", getWorld)
 	myRouter.HandleFunc("/world", createNewWorld).Methods("POST")
 
 	/* Set up CORS */
