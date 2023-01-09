@@ -183,7 +183,7 @@ func deleteNamebyTokenId(w http.ResponseWriter, r *http.Request){
 	tokenid, err := strconv.Atoi(tokenIdStr)
 	fmt.Println(tokenIdStr)
 
-	/* Connect to our DB */
+	/* Connect to DB */
 	client, err := getMongoDBClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 	err = client.Connect(ctx)
@@ -200,6 +200,36 @@ func deleteNamebyTokenId(w http.ResponseWriter, r *http.Request){
 	msg := fmt.Sprintf("Deleted %v documents in the people collection", deleteResult.DeletedCount)
 	fmt.Fprintf(w, msg)
 	fmt.Println(msg)
+}
+
+// DELETE /world/{id}
+func deleteWorld(w http.ResponseWriter, r *http.Request){
+	// Start Func
+	fmt.Println("Endpoint Hit: deleteWorld")
+
+	// Get Path Params
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"]) // ObjectID
+
+	/* Connect to DB */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	/* Get Document by Filter */
+	collection := client.Database(DatabaseName).Collection(CollectionWorlds)
+	filter := bson.D{{"_id", id}} 
+	result, err := collection.DeleteMany(context.TODO(), filter) 
+	if err != nil { log.Fatal(err) } 
+
+	// Return Result
+	msg := fmt.Sprintf("Deleted %v documents in the worlds collection", result.DeletedCount)
+	fmt.Println(msg)
+	fmt.Fprintf(w, msg)
 }
 
 /* GET /name/tokenid/{tokenid} */
@@ -434,8 +464,9 @@ func handleRequests() {
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PUT")
 
 	/* Worlds */
-	myRouter.HandleFunc("/worlds", getWorlds)
-	myRouter.HandleFunc("/world/{id}", getWorld)
+	myRouter.HandleFunc("/worlds", getWorlds) // By Status
+	myRouter.HandleFunc("/world/{id}", getWorld).Methods("GET") // By Object ID
+	myRouter.HandleFunc("/world/{id}", deleteWorld).Methods("DELETE") // By Object ID
 	myRouter.HandleFunc("/world", createNewWorld).Methods("POST")
 
 	/* Set up CORS */
