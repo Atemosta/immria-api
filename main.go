@@ -60,9 +60,7 @@ type WorldID struct {
 	ID	primitive.ObjectID `bson:"_id"`
 }
 
-// let's declare a global Articles array
-// that we can then populate in our main function
-// to simulate a database
+// Global Variables
 var Articles []Article
 var CharacterLimit			int
 var DatabaseName 				string
