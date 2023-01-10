@@ -41,7 +41,7 @@ type NameID struct {
 }
 
 type World struct {
-	Desc		string  
+	Desc		string `json:"desc"` 
 	Image		string `json:"image"`
 	Owner 	string `json:"owner"`
 	Title		string `json:"title"`
@@ -138,9 +138,9 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST "/world"
-func createNewWorld(w http.ResponseWriter, r *http.Request) {
+func createWorld(w http.ResponseWriter, r *http.Request) {
 	// Enter Func
-	fmt.Println("Endpoint Hit: createNewWorld")
+	fmt.Println("Endpoint Hit: createWorld")
 	
 	/* Umarshal POST body into struct */
 	reqBody, _ := ioutil.ReadAll(r.Body)
@@ -202,7 +202,7 @@ func deleteNamebyTokenId(w http.ResponseWriter, r *http.Request){
 	fmt.Println(msg)
 }
 
-// DELETE /world/{id}
+// DELETE "/world/{id}"
 func deleteWorld(w http.ResponseWriter, r *http.Request){
 	// Start Func
 	fmt.Println("Endpoint Hit: deleteWorld")
@@ -446,6 +446,62 @@ func updateExistingName(w http.ResponseWriter, r *http.Request){
 	fmt.Println(updatedName)
 }
 
+// PUT "/world"
+func updateWorld(w http.ResponseWriter, r *http.Request){
+	// Start Func
+	fmt.Println("Endpoint Hit: updateWorld")
+
+	// Unmarshal Request Body
+	reqBody, _ := ioutil.ReadAll(r.Body)
+	var world WorldID 
+	json.Unmarshal(reqBody, &world)
+	fmt.Println("---world")
+	fmt.Println(world)
+
+	// Connect to DB
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+
+	// Create Updated Document
+	update := bson.D{
+		{"$set", 
+			bson.D{
+				{"desc", 		world.Desc},
+				{"image", 	world.Image},
+				{"owner", 	world.Owner},
+				{"title", 	world.Title},
+				{"type", 		world.Type},
+				{"status", 	world.Status},
+			},
+		},
+	}
+	fmt.Println("---update")
+	fmt.Println(update)
+
+	// Update Document by Id
+	collection := client.Database(DatabaseName).Collection(CollectionWorlds)
+	filter := bson.M{"_id": world.ID}
+	result, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("---result")
+	fmt.Println(result)
+
+	// Return Statement
+	if result.ModifiedCount > 0 {
+		json.NewEncoder(w).Encode(world)
+		fmt.Println(world)
+	} else {
+		fmt.Fprintf(w, "Unable to update record")
+		fmt.Println("Unable to update record")
+	}
+}
 
 // REST Endpoints
 func handleRequests() {
@@ -464,10 +520,12 @@ func handleRequests() {
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PUT")
 
 	/* Worlds */
-	myRouter.HandleFunc("/worlds", getWorlds) // By Status
+	myRouter.HandleFunc("/worlds", getWorlds).Methods("GET") // By Status
+	myRouter.HandleFunc("/world", createWorld).Methods("POST")
+	myRouter.HandleFunc("/world", updateWorld).Methods("PUT")
 	myRouter.HandleFunc("/world/{id}", getWorld).Methods("GET") // By Object ID
 	myRouter.HandleFunc("/world/{id}", deleteWorld).Methods("DELETE") // By Object ID
-	myRouter.HandleFunc("/world", createNewWorld).Methods("POST")
+
 
 	/* Set up CORS */
 	// c := cors.New(cors.Options{
