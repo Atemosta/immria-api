@@ -41,12 +41,12 @@ type NameID struct {
 }
 
 type World struct {
-	Desc		string `json:"desc"` 
-	Image		string `json:"image"`
-	Owner 	string `json:"owner"`
-	Title		string `json:"title"`
-	Type 		string `json:"type"`
-	Status 	string `json:"status"`
+	Desc		string `json:"desc"`  // Text Area, User Input
+	Image		string `json:"image"` // URL, Created by Image Upload API
+	Status 	string `json:"status"`// Set to Private by Default
+	Owner 	string `json:"owner"` // Inserted by Auth
+	Title		string `json:"title"` // Text Field, User Input
+	Type 		string `json:"type"`  // Radio Select, User Input
 }
 
 type WorldID struct {
@@ -99,8 +99,8 @@ func createNewName(w http.ResponseWriter, r *http.Request) {
 	var name Name 
 	json.Unmarshal(reqBody, &name)
 	CharacterLimit := viper.GetInt("CHARACTER_LIMIT")  // first 20 characters 
-	if len(name.Value) > 20 { name.Value = name.Value[: + CharacterLimit] }
-	if len(name.World) > 20 { name.World = name.World[: + CharacterLimit] }
+	if len(name.Value) > CharacterLimit { name.Value = name.Value[: + CharacterLimit] }
+	if len(name.World) > CharacterLimit { name.World = name.World[: + CharacterLimit] }
 
 	/* Connect to database */
 	client, err := getMongoDBClient()
@@ -393,7 +393,12 @@ func returnAllNamesByWorld(w http.ResponseWriter, r *http.Request) {
     log.Fatal(err)
 	}
 	fmt.Println(results)
-	json.NewEncoder(w).Encode(results)
+	if results == nil {
+		emptyArray := []string{}
+		json.NewEncoder(w).Encode(emptyArray)
+	} else {
+		json.NewEncoder(w).Encode(results)
+	}
 	fmt.Println("Successfully returned names from world %s!", world)
 }
 
