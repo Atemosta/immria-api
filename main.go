@@ -40,6 +40,11 @@ type NameID struct {
 	World string
 }
 
+type User struct {
+	Email      string `json:"Email"`
+	Name   string `json:"Name"`
+}
+
 type World struct {
 	Desc		string `json:"desc"`  // Text Area, User Input
 	Image		string `json:"image"` // URL, Created by Image Upload API
@@ -66,6 +71,7 @@ var CharacterLimit			int
 var DatabaseName 				string
 var DescriptionLimit		int
 var CollectionNames 		string 
+var CollectionUsers 		string
 var CollectionWorlds 		string
 var MongoDbUser 				string
 var MongoDbPass 				string
@@ -198,6 +204,40 @@ func deleteNamebyTokenId(w http.ResponseWriter, r *http.Request){
 	msg := fmt.Sprintf("Deleted %v documents in the people collection", deleteResult.DeletedCount)
 	fmt.Fprintf(w, msg)
 	fmt.Println(msg)
+}
+
+// POST "/user"
+func createUser(w http.ResponseWriter, r *http.Request) {
+	// Enter Func
+	fmt.Println("Endpoint Hit: createUser")
+	
+	/* Umarshal POST body into struct */
+	reqBody, _ := ioutil.ReadAll(r.Body)
+	var user User 
+	json.Unmarshal(reqBody, &user)
+	if len(user.Email) > 100 { user.Email = user.Email[: + 100] }
+	if len(user.Name) > CharacterLimit { user.Name = user.Name[: + CharacterLimit] }
+
+	/* Connect to database */
+	client, err := getMongoDBClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	err = client.Connect(ctx)
+	if err != nil {
+			log.Fatal(err)
+	}
+	defer client.Disconnect(ctx)
+	collection := client.Database(DatabaseName).Collection(CollectionUsers)
+
+	// Insert New Doc
+	result, err := collection.InsertOne(ctx, user)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(result)
+
+	// Print Return Statement
+	fmt.Println(user)
+	json.NewEncoder(w).Encode(user)
 }
 
 // DELETE "/world/{id}"
@@ -522,6 +562,9 @@ func handleRequests() {
 	myRouter.HandleFunc("/name", createNewName).Methods("POST")
 	myRouter.HandleFunc("/name", updateExistingName).Methods("PUT")
 
+	/* Users */
+	myRouter.HandleFunc("/user", createUser).Methods("POST")
+
 	/* Worlds */
 	myRouter.HandleFunc("/worlds", getWorlds).Methods("GET") // By Status
 	myRouter.HandleFunc("/world", createWorld).Methods("POST")
@@ -564,6 +607,7 @@ func main() {
 	DescriptionLimit = viper.GetInt("DESCRIPTION_LIMIT")
 	CharacterLimit = viper.GetInt("CHARACTER_LIMIT")
 	CollectionNames = viper.GetString("COLLECTION_NAMES") 
+	CollectionUsers = viper.GetString("COLLECTION_USERS")
 	CollectionWorlds = viper.GetString("COLLECTION_WORLDS")
 	DatabaseName = viper.GetString("DATABASE_NAME") 
 
